@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Game</title>
+  <style>
+    html,body { height:100%; margin:0; background:#111; color:white; font-family:"Times New Roman",serif }
+    body { display:grid; place-items:center }
+    canvas { width:800px; height:600px; max-width:100vw; max-height:75vw; border:1px solid #444; background:#000; image-rendering:auto; touch-action:none }
+  </style>
+</head>
+<body>
+<canvas id="game" width="800" height="600" tabindex="0" aria-label="Space strategy game"></canvas>
+<script>
+"use strict";
+
+// This is a direct browser port of Game.java.  The names and data layout are
+// deliberately kept close to the original so the two versions remain comparable.
+const canvas = document.getElementById("game");
+const g = canvas.getContext("2d");
+
+const imageFiles = {
+  fighter:"fighter.gif", advanced:"advanced.gif", beacon:"beacon.gif",
+  destroy:"destroy.gif", edestroy:"edestroy.gif", efighter:"efighter.gif",
+  egun:"egun.gif", generator:"generator.gif", gun:"gun.gif",
+  large:"large.gif", teleport:"teleport.gif"
+};
+const images = {};
+let imagesReady = false;
+
+let area = 0, level = 0, energy = 3000;
+let mdx = 0, mdy = 0, dragShift = false;
+let keyscroll = 20, mousescroll = 20, speed = 20;
+let action = 0, selected = [-1];
+const gunits = [[25,30,1,100],[5,45,10,120],[5,45,2,180]];
+const bcommands = [
+  ["Generator","Teleporter","Large Teleporter","Advanced Teleporter"],
+  ["","","",""], ["Fighter","","",""], ["Destroyer","","",""], ["Space Gun","","",""]
+];
+const act = ["","Attack","Move","Stop"," "];
+const mapsizex = 1600, mapsizey = 1600;
+let mapx = 400, mapy = 1100, scrollx = 0, scrolly = 0;
+let stuff;
+
+const initialStuff = [
+  [725,1350,51,200,0,0,0,0],[50,50,-3,25,3,0,0,0],[1400,140,-3,25,3,0,0,0],
+  [1400,830,-3,25,3,0,0,0],[30,79,-3,25,3,0,0,0],[760,80,-3,25,3,0,0,0],
+  [290,170,-2,20,3,0,0,0],[1090,170,-2,20,3,0,0,0],[1100,770,-2,20,3,0,0,0],
+  [1330,1330,-2,20,3,0,0,0],[1400,280,-1,7,3,0,0,0],[609,740,-1,7,3,0,0,0],
+  [670,730,-1,7,3,0,0,0],[870,240,-1,7,3,0,0,0],[960,670,-1,7,3,0,0,0],
+  [30,930,-1,50,3,0,0,0],[70,1460,-1,7,3,0,0,0],[590,480,-1,7,3,0,0,0]
+];
+
+function resetGame() {
+  stuff = initialStuff.map(row => row.slice());
+  energy = 3000; selected = [-1]; action = 0; mapx = 400; mapy = 1100;
+}
+resetGame();
+
+function preloadImages() {
+  return Promise.all(Object.entries(imageFiles).map(([name,file]) => new Promise((resolve,reject) => {
+    const image = new Image();
+    image.onload = () => { images[name] = image; resolve(); };
+    image.onerror = () => reject(new Error("Could not load images/" + file));
+    image.src = "images/" + file;
+  }))).then(() => imagesReady = true);
+}
+
+function mousePosition(e) {
+  const r = canvas.getBoundingClientRect();
+  return { x:(e.clientX-r.left)*800/r.width, y:(e.clientY-r.top)*600/r.height };
+}
+function button(x,y,w,h,label) {
+  g.fillStyle = "#ddd"; g.fillRect(x,y,w,h);
+  g.strokeStyle = "#777"; g.strokeRect(x+.5,y+.5,w-1,h-1);
+  g.fillStyle = "#000"; g.font = "14px sans-serif"; g.textAlign = "center";
+  g.textBaseline = "middle"; g.fillText(label,x+w/2,y+h/2);
+}
+function inRect(p,x,y,w,h) { return p.x >= x && p.x <= x+w && p.y >= y && p.y <= y+h; }
+function unitSize(type) { return type > 50 ? 150 : gunits[Math.abs(type)-1][1]; }
+function squareroot(square) { return Math.max(1, Math.floor(Math.sqrt(Math.abs(square)+1))); }
+function getdistance(i,j) {
+  return squareroot((stuff[i][0]-stuff[j][0])**2+(stuff[i][1]-stuff[j][1])**2);
+}
+
+function newGame() { level++; area = 1; selected = [-1]; action = 0; }
+function loadmap() { resetGame(); area = 10; canvas.focus(); }
+
+canvas.addEventListener("pointerdown", e => {
+  const p = mousePosition(e);
+  canvas.setPointerCapture(e.pointerId);
+  canvas.focus();
+  if (area === 0) {
+    if (inRect(p,360,50,81,50)) newGame();
+    return;
+  }
+  if (area === 1) {
+    if (inRect(p,700,400,81,50)) loadmap();
+    else if (inRect(p,700,500,81,50)) { area=0; level=0; }
+    return;
+  }
+  if (area === 2 || area === 12) {
+    if (inRect(p,360,450,81,50)) { area=0; level=0; }
+    else if (area === 2 && inRect(p,700,500,81,50)) area=10;
+    return;
+  }
+  if (area !== 10) return;
+
+  if (p.x < 100 && p.y > 500) {
+    mapx = Math.max(0,Math.min(mapsizex-800,p.x*mapsizex/100-400));
+    mapy = Math.max(0,Math.min(mapsizey-500,(p.y-500)*mapsizey/100-250));
+  }
+  mdx=p.x+mapx; mdy=p.y+mapy; dragShift=e.shiftKey;
+  if (p.y < 500) {
+    if (action===0 || selected[0]===-1) {
+      let hit=-1;
+      for (let i=0;i<stuff.length;i++) {
+        const size=unitSize(stuff[i][2]);
+        if (stuff[i][2]>0 && inRect({x:p.x+mapx,y:p.y+mapy},stuff[i][0],stuff[i][1],size,size)) hit=i;
+      }
+      if (hit!==-1) {
+        if (e.shiftKey && selected[0]!==-1 && stuff[hit][2]<50 && stuff[selected[0]][2]<50) {
+          if (!selected.includes(hit)) selected.push(hit);
+        } else selected=[hit];
+      }
+    } else if (stuff[selected[0]][2] < 50) {
+      selected.forEach(i => { stuff[i][4]=action; stuff[i][5]=p.x+mapx; stuff[i][6]=p.y+mapy; });
+      action=0;
+    } else {
+      buildAt(p.x+mapx,p.y+mapy);
+      action=0;
+    }
+  }
+  if (selected[0]!==-1 && p.y>500 && p.x>600 && p.y<566) {
+    action = p.x<700 ? (p.y<533?1:3) : (p.y<533?2:4);
+    if (action>1 && stuff[selected[0]][2]>51) action=0;
+    if (stuff[selected[0]][2]===52) action=0;
+  }
+});
+
+function buildAt(x,y) {
+  const type=stuff[selected[0]][2];
+  const choices = [[x,y,52,50,0,0,0,0],[x,y,53,75,0,0,0,0],
+    [x,y,54,100,0,0,0,0],[x,y,55,100,0,0,0,0],
+    [x,y,1,5,3,0,0,0],[x,y,2,15,3,0,0,0],[x,y,3,20,3,0,0,0]];
+  let item=null, cost=Infinity;
+  if (type===51 && action>=1 && action<=4) { item=choices[action-1]; cost=action===1?1000:action*300-300; }
+  if (type===53 && action===1) { item=choices[4]; cost=100; }
+  if (type===54 && action===1) { item=choices[5]; cost=200; }
+  if (type===55 && action===1) { item=choices[6]; cost=350; }
+  if (item && energy>=cost) { energy-=cost; stuff.push(item); }
+}
+
+canvas.addEventListener("pointerup", e => {
+  if (area!==10 || !mdx) return;
+  const p=mousePosition(e), endx=p.x+mapx, endy=p.y+mapy;
+  if ((endx-mdx)**2>2500 && (endy-mdy)**2>2500) {
+    const lx=Math.min(mdx,endx), gx=Math.max(mdx,endx), ly=Math.min(mdy,endy), gy=Math.max(mdy,endy);
+    let found = dragShift && selected[0]!==-1 && stuff[selected[0]][2]<50 ? selected.slice() : [];
+    for (let i=0;i<stuff.length;i++) {
+      if (stuff[i][2]>0 && stuff[i][2]<50) {
+        const size=unitSize(stuff[i][2]);
+        if (stuff[i][0]+size>lx && stuff[i][0]<gx && stuff[i][1]+size>ly && stuff[i][1]<gy && !found.includes(i)) found.push(i);
+      }
+    }
+    selected=found.length?found:[-1];
+  }
+  mdx=mdy=0;
+});
+
+canvas.addEventListener("pointermove", e => {
+  if (area!==10) return;
+  const p=mousePosition(e);
+  scrollx=p.x<15?-mousescroll:p.x>785?mousescroll:0;
+  scrolly=p.y<15?-mousescroll:p.y>485&&p.y<500?mousescroll:0;
+});
+canvas.addEventListener("pointerleave",()=>{ scrollx=scrolly=0; });
+canvas.addEventListener("contextmenu",e=>e.preventDefault());
+
+window.addEventListener("keydown", e => {
+  if (area!==10) return;
+  if (["ArrowDown","ArrowUp","ArrowLeft","ArrowRight","Escape"].includes(e.key)) e.preventDefault();
+  if (e.key==="ArrowDown") mapy=Math.min(mapsizey-500,mapy+keyscroll);
+  if (e.key==="ArrowUp") mapy=Math.max(0,mapy-keyscroll);
+  if (e.key==="ArrowLeft") mapx=Math.max(0,mapx-keyscroll);
+  if (e.key==="ArrowRight") mapx=Math.min(mapsizex-800,mapx+keyscroll);
+  if (e.key==="Escape") area=2;
+  if (e.key.toLowerCase()==="a") action=1;
+  if (e.key.toLowerCase()==="m") action=2;
+  if (e.key.toLowerCase()==="s") action=3;
+});
+
+function updateGame() {
+  if (scrollx) mapx=Math.max(0,Math.min(mapsizex-800,mapx+scrollx));
+  if (scrolly) mapy=Math.max(0,Math.min(mapsizey-500,mapy+scrolly));
+  for (let i=0;i<stuff.length;i++) {
+    if (stuff[i][2]===52) energy++;
+    if (stuff[i][2]>=50) continue;
+    const unit=Math.abs(stuff[i][2])-1;
+    const target=stuff[i][7];
+    if (target!==0 && target<stuff.length && getdistance(i,target)>gunits[unit][3]) {
+      stuff[i][5]=stuff[target][0]; stuff[i][6]=stuff[target][1];
+    }
+    if (stuff[i][4]<3) {
+      const x=stuff[i][5]-stuff[i][0], y=stuff[i][6]-stuff[i][1], move=gunits[unit][0];
+      if (x*x<move*move && y*y<move*move) { stuff[i][0]=stuff[i][5]; stuff[i][1]=stuff[i][6]; stuff[i][4]=3; }
+      else if (x||y) { const root=squareroot(x*x+y*y); stuff[i][0]+=Math.trunc(move*x/root); stuff[i][1]+=Math.trunc(move*y/root); }
+    }
+  }
+  acquireTargets();
+}
+
+function acquireTargets() {
+  for (let i=0;i<stuff.length;i++) {
+    if (stuff[i][2]>=50 || stuff[i][7]!==0 || stuff[i][4]===2) continue;
+    for (let j=0;j<stuff.length;j++) {
+      if (((stuff[i][2]>0&&stuff[j][2]<0)||(stuff[i][2]<0&&stuff[j][2]>0)) && getdistance(i,j)<300) {
+        stuff[i][7]=j; stuff[i][4]=1; break;
+      }
+    }
+  }
+}
+
+const imageForType = {1:"fighter",2:"destroy",3:"gun",51:"beacon",52:"generator",53:"teleport",
+  54:"large",55:"advanced","-1":"efighter","-2":"edestroy","-3":"egun"};
+function drawGame() {
+  g.fillStyle="#000"; g.fillRect(0,0,800,500);
+  let enemies=false, lasers=[];
+  for (let i=0;i<stuff.length;i++) {
+    const s=stuff[i], size=unitSize(s[2]);
+    if (s[2]<0) enemies=true;
+    if (s[0]<mapx+800 && s[0]+size>mapx && s[1]<mapy+500 && s[1]+size>mapy && images[imageForType[s[2]]])
+      g.drawImage(images[imageForType[s[2]]],s[0]-mapx,s[1]-mapy);
+    const unit=Math.abs(s[2])-1, target=s[7];
+    if (s[2]<50 && target!==0 && target<stuff.length && getdistance(i,target)<=gunits[unit][3])
+      lasers.push([i,target,unit]);
+  }
+  resolveCombat(lasers);
+  drawSelection();
+  drawPanel();
+  if (!enemies) area=12;
+}
+
+function resolveCombat(lasers) {
+  const dead=new Set();
+  lasers.forEach(([i,j,unit])=>{
+    if (!stuff[i]||!stuff[j]||dead.has(j)) return;
+    stuff[i][5]=stuff[i][0]; stuff[i][6]=stuff[i][1];
+    stuff[j][3]-=gunits[unit][2];
+    g.strokeStyle=stuff[i][2]<0?["yellow","red","pink","orange"][Math.floor(Math.random()*4)]:
+      ["blue","green","white","cyan"][Math.floor(Math.random()*4)];
+    g.beginPath(); g.moveTo(stuff[i][0]+gunits[unit][1]/2-mapx,stuff[i][1]+gunits[unit][1]/2-mapy);
+    g.lineTo(stuff[j][0]+15-mapx,stuff[j][1]+25-mapy); g.stroke();
+    if (stuff[j][3]<=0) dead.add(j);
+  });
+  [...dead].sort((a,b)=>b-a).forEach(removeUnit);
+}
+function removeUnit(index) {
+  stuff.splice(index,1);
+  selected=selected.filter(i=>i!==index).map(i=>i>index?i-1:i);
+  if (!selected.length) selected=[-1];
+  stuff.forEach(s=>{ if(s[7]===index)s[7]=0; else if(s[7]>index)s[7]--; });
+}
+function drawSelection() {
+  g.strokeStyle="#fff";
+  if (selected[0]===-1) return;
+  selected.forEach(i=>{ if(stuff[i]) g.strokeRect(stuff[i][0]-mapx,stuff[i][1]-mapy,unitSize(stuff[i][2]),unitSize(stuff[i][2])); });
+}
+function label(text,x,y,color="#fff") { g.fillStyle=color; g.font="14px 'Times New Roman'"; g.textAlign="left"; g.textBaseline="alphabetic"; g.fillText(text,x,y); }
+function drawPanel() {
+  g.fillStyle="#320000";g.fillRect(100,500,700,100);
+  g.strokeStyle="#fff"; [[0,500,800,500],[600,500,600,600],[700,500,700,600],[600,533,800,533],[600,566,800,566]].forEach(l=>{g.beginPath();g.moveTo(l[0],l[1]);g.lineTo(l[2],l[3]);g.stroke()});
+  g.fillStyle="#444";g.fillRect(0,500,100,100);
+  g.fillStyle="#00f";g.fillRect(mapx*100/mapsizex,mapy*100/mapsizey+500,80000/mapsizex,50000/mapsizey);
+  stuff.forEach(s=>{g.fillStyle=s[2]<0?"red":"#0f0";const size=unitSize(s[2]);g.fillRect(s[0]*100/mapsizex,s[1]*100/mapsizey+500,Math.max(1,size*100/mapsizex),Math.max(1,size*100/mapsizey))});
+  if (selected[0]!==-1 && stuff[selected[0]]) {
+    const s=stuff[selected[0]], type=s[2];
+    if (type>0&&type<50) {
+      label("Attack",610,523);label("Move",710,523);label("Stop",610,556);
+      label(bcommands[type+1][0],110,519,"#0f0"); label("Shields:   "+s[3],110,538,"#00f");
+      label("Speed:   "+gunits[type-1][0],110,557,"#aaa");label("Damage:   "+gunits[type-1][2],110,576,"#aaa");
+      label("Range:   "+gunits[type-1][3],110,595,"#aaa");label(act[s[4]],610,589,"#00f");label(act[action],710,589,"#00f");
+    } else if(type>50) {
+      const row=bcommands[type-51]; label(row[0],604,523);label(row[1],704,523);label(row[2],604,556);label(row[3],704,556);
+      if(action)label(row[action-1],710,589,"#00f");
+      label(type>51?bcommands[0][type-52]:"Teleport Beacon",110,519,"#0f0");label("Shields:   "+s[3],110,538,"#00f");
+    }
+    label("Selected Units:   "+selected.length,310,566,"pink");
+  }
+  label("Energy:   "+energy,310,533,"yellow");
+}
+function drawMenu() {
+  g.fillStyle="#000";g.fillRect(0,0,800,600);
+  button(360,50,81,50,"New Game"); button(360,150,81,50," "); button(360,250,81,50," ");
+  button(360,350,81,50," "); button(360,450,81,50,"Exit");
+}
+function drawIntro() {
+  g.fillStyle="#000";g.fillRect(0,0,800,600);
+  label("SPACE GAME",20,55,"#0f0"); label("Destroy every red enemy unit.",20,95,"#0f0");
+  label("Click or drag to select. Use the panel or A/M/S keys to Attack, Move, or Stop.",20,120,"#0f0");
+  label("Arrow keys or the screen edges move the map. Click the minimap to jump.",20,145,"#0f0");
+  label("Select the beacon to construct generators and teleporters.",20,170,"#0f0");
+  button(700,400,81,50,"Play");button(700,500,81,50,"Cancel");
+}
+function drawPause() { g.fillStyle="#000";g.fillRect(0,0,800,600);label("PAUSED",330,280,"yellow");button(360,450,81,50,"Exit");button(700,500,81,50,"Cancel"); }
+function drawVictory() { label("YOU ARE VICTORIOUS!",10,250,"yellow");button(360,450,81,50,"Exit"); }
+function frame(now) {
+  if (area===0) drawMenu();
+  else if (area===1) drawIntro();
+  else if (area===2) drawPause();
+  else if (area===10) { updateGame(); drawGame(); }
+  else if (area===12) drawVictory();
+  if (!imagesReady) { g.fillStyle="#000";g.fillRect(0,0,800,600);label("Loading images…",340,300,"#0f0"); }
+  requestAnimationFrame(frame);
+}
+preloadImages().catch(error=>{ console.error(error); label(error.message,20,300,"red"); });
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
