@@ -12,6 +12,7 @@
 </head>
 <body>
 <canvas id="game" width="800" height="600" tabindex="0" aria-label="Space strategy game"></canvas>
+<script src="AnimateGifs.js"></script>
 <script>
 "use strict";
 
@@ -20,13 +21,23 @@
 const canvas = document.getElementById("game");
 const g = canvas.getContext("2d");
 
-const imageFiles = {
-  fighter:"fighter.gif", advanced:"advanced.gif", beacon:"beacon.gif",
-  destroy:"destroy.gif", edestroy:"edestroy.gif", efighter:"efighter.gif",
-  egun:"egun.gif", generator:"generator.gif", gun:"gun.gif",
-  large:"large.gif", teleport:"teleport.gif"
+// Frame delays come from each original GIF's Graphic Control Extension.
+const imageFrameDelays = {
+  fighter:[0],
+  advanced:[200,200,200,200,200,200,200,200],
+  beacon:[1000,500],
+  destroy:[0],
+  edestroy:[0],
+  efighter:[0],
+  egun:[200,200,200,200,200],
+  generator:[100,100,100,100,100,100,100,100,100,100,100,100,100],
+  gun:[200,200,200,200],
+  large:[200,200,200,200,200,200,200,200],
+  teleport:[200,200,200,200,200,200]
 };
 const images = {};
+const currentFrames = {};
+const animationState = {};
 let imagesReady = false;
 
 let area = 0, level = 0, energy = 3000;
@@ -59,12 +70,37 @@ function resetGame() {
 resetGame();
 
 function preloadImages() {
-  return Promise.all(Object.entries(imageFiles).map(([name,file]) => new Promise((resolve,reject) => {
-    const image = new Image();
-    image.onload = () => { images[name] = image; resolve(); };
-    image.onerror = () => reject(new Error("Could not load images/" + file));
-    image.src = "images/" + file;
-  }))).then(() => imagesReady = true);
+  return Promise.all(Object.entries(imageFrameDelays).map(async ([name,delays]) => {
+    const animation = new Animation();
+    const frames = await Promise.all(Array.from({length:delays.length},(_,index) => new Promise((resolve,reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error(`Could not load images/frames/${name}-${index}.png`));
+      image.src = `images/frames/${name}-${index}.png`;
+    })));
+    frames.forEach(frame => animation.addFrame(frame));
+    images[name] = animation;
+    currentFrames[name] = animation.getFrame();
+    animationState[name] = {delays, frameIndex:0, nextFrameAt:null};
+  })).then(() => imagesReady = true);
+}
+
+function updateAnimatedFrames(now) {
+  if (!imagesReady) return;
+  Object.entries(images).forEach(([name,animation]) => {
+    const state=animationState[name];
+    if (state.delays.length===1) return;
+    if (state.nextFrameAt===null) {
+      state.nextFrameAt=now+state.delays[state.frameIndex];
+      return;
+    }
+    // Catch up after a hidden tab without permanently changing animation speed.
+    while (now>=state.nextFrameAt) {
+      currentFrames[name]=animation.getFrame();
+      state.frameIndex=(state.frameIndex+1)%state.delays.length;
+      state.nextFrameAt+=state.delays[state.frameIndex];
+    }
+  });
 }
 
 function mousePosition(e) {
@@ -230,8 +266,8 @@ function drawGame() {
   for (let i=0;i<stuff.length;i++) {
     const s=stuff[i], size=unitSize(s[2]);
     if (s[2]<0) enemies=true;
-    if (s[0]<mapx+800 && s[0]+size>mapx && s[1]<mapy+500 && s[1]+size>mapy && images[imageForType[s[2]]])
-      g.drawImage(images[imageForType[s[2]]],s[0]-mapx,s[1]-mapy);
+    if (s[0]<mapx+800 && s[0]+size>mapx && s[1]<mapy+500 && s[1]+size>mapy && currentFrames[imageForType[s[2]]])
+      g.drawImage(currentFrames[imageForType[s[2]]],s[0]-mapx,s[1]-mapy);
     const unit=Math.abs(s[2])-1, target=s[7];
     if (s[2]<50 && target!==0 && target<stuff.length && getdistance(i,target)<=gunits[unit][3])
       lasers.push([i,target,unit]);
@@ -306,6 +342,7 @@ function drawIntro() {
 function drawPause() { g.fillStyle="#000";g.fillRect(0,0,800,600);label("PAUSED",330,280,"yellow");button(360,450,81,50,"Exit");button(700,500,81,50,"Cancel"); }
 function drawVictory() { label("YOU ARE VICTORIOUS!",10,250,"yellow");button(360,450,81,50,"Exit"); }
 function frame(now) {
+  updateAnimatedFrames(now);
   if (area===0) drawMenu();
   else if (area===1) drawIntro();
   else if (area===2) drawPause();
