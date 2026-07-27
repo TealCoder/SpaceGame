@@ -40,7 +40,7 @@ const currentFrames = {};
 const animationState = {};
 let imagesReady = false;
 
-let area = 0, level = 0, energy = 3000;
+let area = 1, level = 0, energy = 3000;
 let mdx = 0, mdy = 0, dragShift = false;
 let keyscroll = 20, mousescroll = 20, speed = 20;
 let action = 0, selected = [-1];
@@ -120,24 +120,23 @@ function getdistance(i,j) {
   return squareroot((stuff[i][0]-stuff[j][0])**2+(stuff[i][1]-stuff[j][1])**2);
 }
 
-function newGame() { level++; area = 1; selected = [-1]; action = 0; }
 function loadmap() { resetGame(); area = 10; canvas.focus(); }
 
 canvas.addEventListener("pointerdown", e => {
   const p = mousePosition(e);
   canvas.setPointerCapture(e.pointerId);
   canvas.focus();
-  if (area === 0) {
-    if (inRect(p,360,50,81,50)) newGame();
+  if (area === 1) {
+    if (inRect(p,100,520,280,55)) area=3;
+    else if (inRect(p,420,520,280,55)) loadmap();
     return;
   }
-  if (area === 1) {
-    if (inRect(p,700,400,81,50)) loadmap();
-    else if (inRect(p,700,500,81,50)) { area=0; level=0; }
+  if (area === 3) {
+    if (inRect(p,340,330,120,45)) area=1;
     return;
   }
   if (area === 2 || area === 12) {
-    if (inRect(p,360,450,81,50)) { area=0; level=0; }
+    if (inRect(p,360,450,81,50)) { area=1; level=0; }
     else if (area === 2 && inRect(p,700,500,81,50)) area=10;
     return;
   }
@@ -326,26 +325,29 @@ function drawPanel() {
   }
   label("Energy:   "+energy,310,533,"yellow");
 }
-function drawMenu() {
-  g.fillStyle="#000";g.fillRect(0,0,800,600);
-  button(360,50,81,50,"New Game"); button(360,150,81,50," "); button(360,250,81,50," ");
-  button(360,350,81,50," "); button(360,450,81,50,"Exit");
-}
 function drawIntro() {
   g.fillStyle="#000";g.fillRect(0,0,800,600);
   label("SPACE GAME",20,55,"#0f0"); label("Destroy every red enemy unit.",20,95,"#0f0");
   label("Click or drag to select. Use the panel or A/M/S keys to Attack, Move, or Stop.",20,120,"#0f0");
   label("Arrow keys or the screen edges move the map. Click the minimap to jump.",20,145,"#0f0");
   label("Select the beacon to construct generators and teleporters.",20,170,"#0f0");
-  button(700,400,81,50,"Play");button(700,500,81,50,"Cancel");
+  button(100,520,280,55,"Tutorial");button(420,520,280,55,"Original");
+}
+function drawTutorialNotice() {
+  drawIntro();
+  g.fillStyle="#181818";g.fillRect(240,220,320,155);
+  g.strokeStyle="#0f0";g.lineWidth=2;g.strokeRect(240,220,320,155);g.lineWidth=1;
+  g.font="24px 'Times New Roman'";g.fillStyle="#0f0";g.textAlign="center";
+  g.textBaseline="alphabetic";g.fillText("Working on it...",400,285);
+  button(340,330,120,45,"OK");
 }
 function drawPause() { g.fillStyle="#000";g.fillRect(0,0,800,600);label("PAUSED",330,280,"yellow");button(360,450,81,50,"Exit");button(700,500,81,50,"Cancel"); }
 function drawVictory() { label("YOU ARE VICTORIOUS!",10,250,"yellow");button(360,450,81,50,"Exit"); }
 function frame(now) {
   updateAnimatedFrames(now);
-  if (area===0) drawMenu();
-  else if (area===1) drawIntro();
+  if (area===1) drawIntro();
   else if (area===2) drawPause();
+  else if (area===3) drawTutorialNotice();
   else if (area===10) { updateGame(); drawGame(); }
   else if (area===12) drawVictory();
   if (!imagesReady) { g.fillStyle="#000";g.fillRect(0,0,800,600);label("Loading images…",340,300,"#0f0"); }
