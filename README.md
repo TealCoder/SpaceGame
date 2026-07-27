@@ -10,11 +10,29 @@ Learning to program in High School, one of my immediate goals was to produce a g
 
 
 
+##### The Theme
+
 I remember I didn't want to deal with a lot of the tedious issues I knew Warcraft had to contend with. So I figure out that: ships floating in space wouldn't collide, vague circular shapes could represent them without needing rotation, no melee combat had to be lined up properly and in fact lasers would avoid having to track arrows and other missiles. Hence the space theme.
 
 
 
+##### The Art
+
 I had been taking some computer art classes where I learned to make animated gifs and obviously had to have gratuitous animations everywhere. I think these silly little illustrations were all created with Island School's fully licensed Adobe something or other.
+
+
+
+##### The Units
+
+There were 3 tiers of tech in WC2 so I tried to make three tiers of tech here. I also saw that it was the minimum that would be needed for a properly balanced rock paper scissors game:
+
+* Battleships would outlast and outgun Fighters;
+* SpaceGuns would destroy Batteships from distance;
+* Fighter swarms would overwhelm SpaceGuns.
+
+Then the formation tactics I loved from "Myth" would become relevant. But I never got around to balancing these things, I suspect the big impact of seeing
+
+
 
 
 
@@ -36,7 +54,7 @@ I was in 11th grade? but had a slot open for "High School Capstone" class. This 
 
 **Conclusion**: I rambled for a couple pages about any possible thing that went gone wrong because that's what I thought real scientists did (they don't). One notable thing is that I had intended to do a double blind study, but failed to build a tutorial and I think that should have been a signal to myself about weaknesses in my game design and communication skills.
 
-**Revisited Conclusion**: despite a 11th grader conclusively proving that no such effect exists, PHDs would continue to research the topic and in fact generally conclude that this effect is real: [Priming](https://en.wikipedia.org/wiki/Priming\_(psychology)) 
+**Revisited Conclusion**: despite a 11th grader conclusively proving that no such effect exists, PHDs would continue to research the topic and in fact generally conclude that this effect is real: [Priming](https://en.wikipedia.org/wiki/Priming_%28psychology%29)
 
 
 
@@ -52,7 +70,7 @@ I had a sense that things like the O(n^2) of ships looking for each other was in
 
 ## The Demo
 
-There's a Javascript version of this game here, because late 90s Java doesn't seem to agree with 2020s Java compilers and I don't have any java interpreters around anyway; they got removed from most browsers and I've given up getting one installed on windows. The JS code is the result of AI (OpenAI's Codex) translating the Java code to JS; I was going to do this by hand for no reason: I already got the experience of translating a couple of my other early [Java game](https://github.com/TealCoder/Tyrian)s to Javascript in the pre-AI era. I don't expect this game to garnish enough fame that will require me to sheepishly admit that the translation was done by AI. Actually, **I was compiling this to java bytecode by machine, why shouldn't I compile it to javascript by machine?**
+There's a Javascript version of this game here, because late 90s Java doesn't seem to agree with 2020s Java compilers and I don't have any java interpreters around anyway; they got removed from most browsers and I've given up getting one installed on windows. The JS code is the result of AI (OpenAI's Codex) translating the Java code to JS; I was going to do this by hand for no reason: I already got the experience of translating a couple of my other early [Java game](https://github.com/TealCoder/Tyrian)s to Javascript in the pre-AI era. I don't expect this game to garnish enough fame that will require me to sheepishly admit that the translation was done by AI. An further, **I was compiling this to java bytecode by machine, why shouldn't I compile it to javascript by machine?**
 
 
 
