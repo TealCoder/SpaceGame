@@ -160,6 +160,49 @@ const mapsizex = 1600, mapsizey = 1600;
 let mapx = 400, mapy = 1100, scrollx = 0, scrolly = 0;
 let stuff;
 
+// Generate once so stars stay in place as the camera moves and returns.
+const starLayers = [
+  {count:90, depth:0.12, brightness:60},
+  {count:45, depth:0.28, brightness:90},
+  {count:16, depth:0.48, brightness:125}
+].map((layer,index) => ({
+  ...layer,
+  stars:Array.from({length:layer.count},() => ({
+    x:Math.random()*800,
+    y:Math.random()*500,
+    brightness:layer.brightness+Math.floor(Math.random()*30),
+    twinkle:index===2,
+    period:2400+Math.random()*3600,
+    phase:Math.random()*6000
+  }))
+}));
+
+function drawStarfield(now) {
+  g.save();
+  g.beginPath(); g.rect(0,0,800,500); g.clip();
+  for (const layer of starLayers) {
+    for (const star of layer.stars) {
+      const x=Math.floor(((star.x-mapx*layer.depth)%800+800)%800);
+      const y=Math.floor(((star.y-mapy*layer.depth)%500+500)%500);
+      const shade=star.brightness;
+      g.fillStyle=`rgb(${shade},${shade},${shade})`;
+      g.fillRect(x,y,1,1);
+      if (star.twinkle) {
+        // Five pixels within a 3x3 footprint; staggered, slow shape changes.
+        const diagonal=Math.floor((now+star.phase)/star.period)%2===0;
+        if (diagonal) {
+          g.fillRect(x-1,y-1,1,1); g.fillRect(x+1,y-1,1,1);
+          g.fillRect(x-1,y+1,1,1); g.fillRect(x+1,y+1,1,1);
+        } else {
+          g.fillRect(x-1,y,1,1); g.fillRect(x+1,y,1,1);
+          g.fillRect(x,y-1,1,1); g.fillRect(x,y+1,1,1);
+        }
+      }
+    }
+  }
+  g.restore();
+}
+
 const initialStuff = [
   [725,1350,51,200,0,0,0,0],[50,50,-3,25,3,0,0,0],[1400,140,-3,25,3,0,0,0],
   [1400,830,-3,25,3,0,0,0],[30,79,-3,25,3,0,0,0],[760,80,-3,25,3,0,0,0],
@@ -391,8 +434,9 @@ function acquireTargets() {
 
 const imageForType = {1:"fighter",2:"destroy",3:"gun",51:"beacon",52:"generator",53:"teleport",
   54:"large",55:"advanced","-1":"efighter","-2":"edestroy","-3":"egun"};
-function drawGame() {
+function drawGame(now) {
   g.fillStyle="#000"; g.fillRect(0,0,800,500);
+  drawStarfield(now);
   let enemies=false, lasers=[];
   for (let i=0;i<stuff.length;i++) {
     const s=stuff[i], size=unitSize(s[2]);
@@ -475,7 +519,7 @@ function frame(now) {
   updateAnimatedFrames(now);
   if (area===1) drawIntro();
   else if (area===2) drawPause();
-  else if (area===10) { updateGame(); drawGame(); }
+  else if (area===10) { updateGame(); drawGame(now); }
   else if (area===12) drawVictory();
   if (!imagesReady) { g.fillStyle="#000";g.fillRect(0,0,800,600);label("Loading images…",340,300,"#0f0"); }
   requestAnimationFrame(frame);
